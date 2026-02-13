@@ -1,4 +1,4 @@
-# Arabic EEG Imagined Speech Classification 🧠
+# Arabic EEG Imagined Speech Classification
 
 End-to-end deep learning pipeline for Arabic imagined speech decoding from EEG signals.
 
@@ -9,40 +9,40 @@ End-to-end deep learning pipeline for Arabic imagined speech decoding from EEG s
 
 ---
 
-## 📋 Table of Contents
+## Table of Contents
 
-- [Project Overview](#-project-overview)
-- [Dataset](#-dataset)
-- [Architecture](#-architecture)
-- [Installation](#-installation)
-- [Quick Start](#-quick-start)
-- [Results](#-results)
-- [Project Structure](#-project-structure)
-- [EDA Scripts](#-eda-scripts)
-- [Contributing](#-contributing)
+- [Project Overview](#project-overview)
+- [Dataset](#dataset)
+- [Architecture](#architecture)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Results](#results)
+- [Project Structure](#project-structure)
+- [EDA Scripts](#eda-scripts)
+- [Contributing](#contributing)
 
 ---
 
-## 🎯 Project Overview
+## Project Overview
 
 This project implements a **CNN + Transformer** hybrid architecture for classifying **16 Arabic words** from EEG brain signals. The system decodes imagined speech from non-invasive EEG recordings, enabling potential applications in:
 
-- 🦽 **Assistive technology** for paralyzed patients
-- 🗣️ **Silent speech interfaces**
-- 🧠 **Brain-computer interfaces (BCI)**
+- **Assistive technology** for paralyzed patients
+- **Silent speech interfaces**
+- **Brain-computer interfaces (BCI)**
 
 ### Key Features
 
-- ✅ Multi-band frequency filtering (Theta, Alpha, Beta)
-- ✅ Channel attention mechanism (Squeeze-and-Excitation)
-- ✅ Transformer encoder for temporal modeling
-- ✅ Advanced data augmentation for EEG
-- ✅ Complete preprocessing pipeline
-- ✅ Pre-trained model included
+- Multi-band frequency filtering (Theta, Alpha, Beta)
+- Channel attention mechanism (Squeeze-and-Excitation)
+- Transformer encoder for temporal modeling
+- Advanced data augmentation for EEG
+- Complete preprocessing pipeline
+- Pre-trained model included
 
 ---
 
-## 📊 Dataset
+## Dataset
 
 **ArEEG_Words** - Arabic Imagined Speech EEG Dataset
 
@@ -76,7 +76,7 @@ AF3, F7, F3, FC5, T7, P7, O1, O2, P8, T8, FC6, F4, F8, AF4
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ### Deep Learning Pipeline (CNN + Transformer)
 
@@ -137,7 +137,7 @@ Raw EEG (14 channels × 128 Hz)
 
 ---
 
-## 📦 Installation
+## Installation
 
 ### Prerequisites
 
@@ -173,7 +173,7 @@ python test_installation.py
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### 1. Training
 
@@ -223,7 +223,7 @@ python visualize_results.py --output_dir ./outputs_advanced
 
 ---
 
-## 📈 Results
+## Results
 
 ### Performance Metrics
 
@@ -248,51 +248,51 @@ python visualize_results.py --output_dir ./outputs_advanced
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 arabic-eeg-speech/
-│
-├── 📄 README.md                    # Documentation
-├── 📄 LICENSE                      # MIT License
-├── 📄 CONTRIBUTING.md              # Contribution guidelines
-├── 📄 requirements.txt             # Python dependencies
-├── 📄 .gitignore                   # Git ignore rules
-│
-├── 🧠 train_advanced_model.py      # Main training script
-├── 🔮 predict.py                   # Inference script
-├── 📊 visualize_results.py         # Plot results
-├── 🧪 test_installation.py         # Verify setup
-│
-├── 📁 .github/workflows/           # CI/CD pipelines
-│   └── ci.yml                      # GitHub Actions workflow
-│
-├── 📁 outputs_advanced/            # Trained model & results
-│   ├── best_model.keras            # Trained model weights
-│   ├── normalization_stats.npz     # Preprocessing stats
-│   ├── test_metrics.json           # Performance metrics
-│   ├── training_history.json       # Training curves data
-│   └── confusion_matrix.png        # Confusion matrix plot
-│
-├── 📁 eda/                         # EDA & Traditional ML pipeline
-│   ├── main.py                     # Traditional ML pipeline
-│   ├── eda_areeg_words.py          # Exploratory data analysis
-│   ├── csp_ovr.py                  # Common Spatial Patterns
-│   ├── nca_selection.py            # Feature selection (NCA)
-│   ├── stacking_model.py           # Ensemble classifier
-│   └── config.py                   # Configuration
-│
-└── 📁 data/                        # Dataset (16 classes)
-    ├── select/                     # اختر - Select
-    ├── down/                       # اسفل - Down
-    ├── up/                         # اعلى - Up
-    ├── ...                         # (13 more classes)
-    └── eda_*.png/csv               # EDA visualizations
+|
+|-- README.md                    # Documentation
+|-- LICENSE                      # MIT License
+|-- CONTRIBUTING.md              # Contribution guidelines
+|-- requirements.txt             # Python dependencies
+|-- .gitignore                   # Git ignore rules
+|
+|-- train_advanced_model.py      # Main training script
+|-- predict.py                   # Inference script
+|-- visualize_results.py         # Plot results
+|-- test_installation.py         # Verify setup
+|
+|-- .github/workflows/           # CI/CD pipelines
+|   +-- ci.yml                   # GitHub Actions workflow
+|
+|-- outputs_advanced/            # Trained model & results
+|   |-- best_model.keras         # Trained model weights
+|   |-- normalization_stats.npz  # Preprocessing stats
+|   |-- test_metrics.json        # Performance metrics
+|   |-- training_history.json    # Training curves data
+|   +-- confusion_matrix.png     # Confusion matrix plot
+|
+|-- eda/                         # EDA & Traditional ML pipeline
+|   |-- main.py                  # Traditional ML pipeline
+|   |-- eda_areeg_words.py       # Exploratory data analysis
+|   |-- csp_ovr.py               # Common Spatial Patterns
+|   |-- nca_selection.py         # Feature selection (NCA)
+|   |-- stacking_model.py        # Ensemble classifier
+|   +-- config.py                # Configuration
+|
++-- data/                        # Dataset (16 classes)
+    |-- select/                  # Select
+    |-- down/                    # Down
+    |-- up/                      # Up
+    |-- ...                      # (13 more classes)
+    +-- eda_*.png/csv            # EDA visualizations
 ```
 
 ---
 
-## 🔬 EDA Scripts
+## EDA Scripts
 
 The `eda/` folder contains **exploratory data analysis** and an alternative **traditional machine learning** pipeline:
 
@@ -334,7 +334,7 @@ python main.py --data_dir "../data" --output_dir "./output" --n_splits 5
 
 ---
 
-## 🔧 Technical Details
+## Technical Details
 
 ### Preprocessing
 
@@ -363,7 +363,7 @@ python main.py --data_dir "../data" --output_dir "./output" --n_splits 5
 
 ---
 
-## 📚 References
+## References
 
 - ArEEG Dataset: Arabic Imagined Speech EEG
 - EPOC X: Emotiv 14-channel EEG headset
@@ -371,13 +371,13 @@ python main.py --data_dir "../data" --output_dir "./output" --n_splits 5
 
 ---
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
-## 👥 Contributing
+## Contributing
 
 Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
 
@@ -389,7 +389,7 @@ Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for de
 
 ---
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - ArEEG Dataset: Arabic Imagined Speech EEG
 - Emotiv EPOC X: 14-channel EEG headset
@@ -397,4 +397,4 @@ Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for de
 
 ---
 
-**⭐ If you find this project useful, please consider giving it a star!**
+**If you find this project useful, please consider giving it a star!**

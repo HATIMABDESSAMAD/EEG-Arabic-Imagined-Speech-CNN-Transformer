@@ -64,4 +64,4 @@ Open an issue with the "question" label.
 
 ---
 
-Thank you for contributing! 🧠
+Thank you for contributing!
