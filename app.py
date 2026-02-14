@@ -215,9 +215,7 @@ FREQUENCY_BANDS = {
     'beta': (13, 30),   # Beta: 13-30 Hz
 }
 
-MODEL_PATH = "outputs_advanced/best_model.h5"
-MODEL_PATH_KERAS = "outputs_advanced/best_model.keras"
-WEIGHTS_PATH = "outputs_advanced/model_weights.weights.h5"
+MODEL_PATH = "outputs_advanced/best_model.keras"
 NORM_STATS_PATH = "outputs_advanced/normalization_stats.npz"
 
 # ============================================================================
@@ -271,37 +269,19 @@ def load_model():
         'Custom>ChannelAttention': ChannelAttention,
     }
     
-    # Method 1: Try H5 format (most compatible)
-    if os.path.exists(MODEL_PATH):
-        try:
-            model = tf.keras.models.load_model(MODEL_PATH, custom_objects=custom_objects, compile=False)
-            model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
-            return model
-        except Exception as e:
-            st.warning(f"H5 loading failed: {e}")
+    if not os.path.exists(MODEL_PATH):
+        st.error(f"Model file not found: {MODEL_PATH}")
+        return None
     
-    # Method 2: Rebuild architecture and load weights
-    if os.path.exists(WEIGHTS_PATH):
-        try:
-            model = rebuild_model_architecture()
-            model.load_weights(WEIGHTS_PATH)
-            model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
-            return model
-        except Exception as e:
-            st.warning(f"Weights loading failed: {e}")
-    
-    # Method 3: Try .keras format as last resort
-    if os.path.exists(MODEL_PATH_KERAS):
-        try:
-            model = tf.keras.models.load_model(MODEL_PATH_KERAS, custom_objects=custom_objects, compile=False)
-            model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
-            return model
-        except Exception as e:
-            st.error(f"All loading methods failed. Error: {e}")
-            import traceback
-            st.text(traceback.format_exc())
-    
-    return None
+    try:
+        model = tf.keras.models.load_model(MODEL_PATH, custom_objects=custom_objects, compile=False)
+        model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+        return model
+    except Exception as e:
+        st.error(f"Failed to load model: {e}")
+        import traceback
+        st.text(traceback.format_exc())
+        return None
 
 
 def rebuild_model_architecture():

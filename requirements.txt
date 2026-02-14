@@ -4,11 +4,12 @@
 # =============================================================================
 
 # Core Deep Learning
-tensorflow>=2.14.0
-keras>=3.0.0
+# IMPORTANT: Must use TensorFlow 2.15.x which bundles Keras 2.15
+# The model was trained with Keras 2 and cannot load in Keras 3
+tensorflow==2.15.0
 
 # Data Processing
-numpy>=1.24.0
+numpy>=1.24.0,<2.0.0
 pandas>=2.0.0
 scipy>=1.11.0
 
