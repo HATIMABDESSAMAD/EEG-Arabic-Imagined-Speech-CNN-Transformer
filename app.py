@@ -80,9 +80,8 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ============================================================================
-# Register Custom Layers (Required for model loading)
+# Custom Layers (Required for model loading)
 # ============================================================================
-@tf.keras.utils.register_keras_serializable()
 class EEGAugmenter(layers.Layer):
     """Data augmentation layer for EEG signals."""
     
@@ -110,7 +109,6 @@ class EEGAugmenter(layers.Layer):
         return x
 
 
-@tf.keras.utils.register_keras_serializable()
 class AdvancedEEGAugmenter(layers.Layer):
     """Advanced augmentation with channel dropout."""
     
@@ -157,7 +155,6 @@ class AdvancedEEGAugmenter(layers.Layer):
         return x
 
 
-@tf.keras.utils.register_keras_serializable()
 class ChannelAttention(layers.Layer):
     """Squeeze-and-Excitation attention for channels."""
     
@@ -270,7 +267,12 @@ def load_model():
         'ChannelAttention': ChannelAttention
     }
     
-    return tf.keras.models.load_model(MODEL_PATH, custom_objects=custom_objects)
+    try:
+        # Try loading with compile=False for better compatibility
+        return tf.keras.models.load_model(MODEL_PATH, custom_objects=custom_objects, compile=False)
+    except Exception as e:
+        st.error(f"Error loading model: {str(e)}")
+        return None
 
 
 @st.cache_resource
