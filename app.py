@@ -17,13 +17,6 @@ from pathlib import Path
 from collections import Counter
 import os
 
-# Try to import keras.saving for serialization (Keras 3)
-try:
-    from keras import saving as keras_saving
-    HAS_KERAS_SAVING = True
-except ImportError:
-    HAS_KERAS_SAVING = False
-
 # ============================================================================
 # Page Configuration
 # ============================================================================
@@ -90,14 +83,7 @@ st.markdown("""
 # Custom Layers (Required for model loading)
 # ============================================================================
 
-# Decorator function that works with both Keras 2 and 3
-def register_if_available(cls):
-    """Register class with Keras if serialization is available."""
-    if HAS_KERAS_SAVING:
-        return keras_saving.register_keras_serializable()(cls)
-    return cls
-
-@register_if_available
+# Note: No decorators - using custom_objects dict for compatibility
 class EEGAugmenter(layers.Layer):
     """Data augmentation layer for EEG signals."""
     
@@ -125,7 +111,6 @@ class EEGAugmenter(layers.Layer):
         return x
 
 
-@register_if_available
 class AdvancedEEGAugmenter(layers.Layer):
     """Advanced augmentation with channel dropout."""
     
@@ -172,7 +157,6 @@ class AdvancedEEGAugmenter(layers.Layer):
         return x
 
 
-@register_if_available
 class ChannelAttention(layers.Layer):
     """Squeeze-and-Excitation attention for channels."""
     
@@ -278,34 +262,138 @@ def load_model():
     if not os.path.exists(MODEL_PATH):
         return None
     
-    # Explicitly pass custom objects for model loading
-    # Try multiple naming conventions that Keras might use
+    # Custom objects dict - register all custom layers with multiple naming conventions
     custom_objects = {
         'EEGAugmenter': EEGAugmenter,
         'AdvancedEEGAugmenter': AdvancedEEGAugmenter,
         'ChannelAttention': ChannelAttention,
-        # Keras 3 format with Custom> prefix
         'Custom>EEGAugmenter': EEGAugmenter,
         'Custom>AdvancedEEGAugmenter': AdvancedEEGAugmenter,
         'Custom>ChannelAttention': ChannelAttention,
-        # __main__ package format (when saved from main script)
-        '__main__.EEGAugmenter': EEGAugmenter,
-        '__main__.AdvancedEEGAugmenter': AdvancedEEGAugmenter,
-        '__main__.ChannelAttention': ChannelAttention,
     }
     
+    # Method 1: Try with safe_mode=False (Keras 3.x)
     try:
-        # Try loading with compile=False for better compatibility
-        model = tf.keras.models.load_model(MODEL_PATH, custom_objects=custom_objects, compile=False)
-        # Compile for prediction
+        model = tf.keras.models.load_model(
+            MODEL_PATH, 
+            custom_objects=custom_objects, 
+            compile=False,
+            safe_mode=False  # Allow custom objects
+        )
+        model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+        return model
+    except TypeError:
+        # safe_mode not supported in this Keras version
+        pass
+    except Exception as e:
+        st.warning(f"Method 1 failed: {e}")
+    
+    # Method 2: Try standard loading without safe_mode
+    try:
+        model = tf.keras.models.load_model(
+            MODEL_PATH, 
+            custom_objects=custom_objects, 
+            compile=False
+        )
         model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
         return model
     except Exception as e:
-        st.error(f"Error loading model: {str(e)}")
-        # Log more details for debugging
+        st.warning(f"Method 2 failed: {e}")
+    
+    # Method 3: Try loading weights only into rebuilt architecture
+    try:
+        model = rebuild_model_architecture()
+        model.load_weights(MODEL_PATH)
+        model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+        return model
+    except Exception as e:
+        st.error(f"All loading methods failed. Last error: {e}")
         import traceback
         st.text(traceback.format_exc())
         return None
+
+
+def rebuild_model_architecture():
+    """Rebuild the exact model architecture for weight loading."""
+    from tensorflow.keras import regularizers
+    
+    input_shape = (128, 42)
+    num_classes = 16
+    cnn_filters = 72
+    transformer_layers = 2
+    num_heads = 6
+    ff_dim = 144
+    dropout = 0.25
+    weight_decay = 2e-4
+    
+    time_steps, n_channels = input_shape
+    
+    inputs = layers.Input(shape=input_shape, name='eeg_input')
+    x = inputs
+    
+    # Advanced augmentation
+    x = AdvancedEEGAugmenter(noise_std=0.02, time_shift_max=8, channel_dropout=0.1)(x)
+    
+    # CNN Block with Channel Attention
+    x = layers.Conv1D(cnn_filters, kernel_size=1, padding='same', kernel_regularizer=regularizers.l2(weight_decay))(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.Activation('gelu')(x)
+    
+    x = layers.Conv1D(cnn_filters, kernel_size=7, padding='same', kernel_regularizer=regularizers.l2(weight_decay))(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.Activation('gelu')(x)
+    x = ChannelAttention(reduction_ratio=4)(x)
+    x = layers.Dropout(dropout)(x)
+    
+    x = layers.Conv1D(cnn_filters, kernel_size=5, padding='same', kernel_regularizer=regularizers.l2(weight_decay))(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.Activation('gelu')(x)
+    x = ChannelAttention(reduction_ratio=4)(x)
+    x = layers.Dropout(dropout)(x)
+    
+    x = layers.Conv1D(cnn_filters, kernel_size=3, padding='same', kernel_regularizer=regularizers.l2(weight_decay))(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.Activation('gelu')(x)
+    x = layers.Dropout(dropout)(x)
+    
+    x = layers.MaxPooling1D(pool_size=2, strides=2)(x)
+    x = layers.MaxPooling1D(pool_size=2, strides=2)(x)
+    
+    # Transformer
+    seq_len = 32  # After pooling: 128 -> 64 -> 32
+    embed_dim = cnn_filters
+    
+    pos_embedding = layers.Embedding(input_dim=seq_len, output_dim=embed_dim, embeddings_regularizer=regularizers.l2(weight_decay))(tf.range(seq_len))
+    x = x + pos_embedding
+    x = layers.Dropout(dropout * 0.5)(x)
+    
+    for i in range(transformer_layers):
+        attn_output = layers.MultiHeadAttention(
+            num_heads=num_heads, key_dim=embed_dim // num_heads,
+            dropout=dropout * 0.5, kernel_regularizer=regularizers.l2(weight_decay)
+        )(x, x)
+        x = layers.Add()([x, attn_output])
+        x = layers.LayerNormalization(epsilon=1e-6)(x)
+        
+        ff = layers.Dense(ff_dim * 2, activation='gelu', kernel_regularizer=regularizers.l2(weight_decay))(x)
+        ff = layers.Dropout(dropout)(ff)
+        ff = layers.Dense(embed_dim, kernel_regularizer=regularizers.l2(weight_decay))(ff)
+        ff = layers.Dropout(dropout)(ff)
+        
+        x = layers.Add()([x, ff])
+        x = layers.LayerNormalization(epsilon=1e-6)(x)
+    
+    # Classification Head
+    x = layers.GlobalAveragePooling1D()(x)
+    x = layers.Dropout(dropout)(x)
+    x = layers.Dense(128, activation='gelu', kernel_regularizer=regularizers.l2(weight_decay))(x)
+    x = layers.Dropout(dropout)(x)
+    x = layers.Dense(64, activation='gelu', kernel_regularizer=regularizers.l2(weight_decay))(x)
+    x = layers.Dropout(dropout * 0.5)(x)
+    outputs = layers.Dense(num_classes, activation='softmax', dtype='float32', kernel_regularizer=regularizers.l2(weight_decay))(x)
+    
+    model = keras.Model(inputs=inputs, outputs=outputs, name='Advanced_MultiBand_CNN_Transformer')
+    return model
 
 
 @st.cache_resource
