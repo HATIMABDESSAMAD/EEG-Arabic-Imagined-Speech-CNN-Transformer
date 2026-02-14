@@ -221,6 +221,29 @@ python predict.py --model_dir ./outputs_advanced --directory ./test_data --outpu
 python visualize_results.py --output_dir ./outputs_advanced
 ```
 
+### 4. Streamlit Web App
+
+**Launch locally:**
+
+```bash
+streamlit run app.py
+```
+
+Then open your browser at `http://localhost:8501`
+
+**Features:**
+- Upload EEG recordings for instant classification
+- Interactive visualizations (probabilities, heatmaps, consensus voting)
+- Sample analysis from the dataset
+- Model architecture explanation
+
+**Deploy to Streamlit Cloud:**
+1. Push your repository to GitHub
+2. Go to [share.streamlit.io](https://share.streamlit.io)
+3. Connect your GitHub repository
+4. Set `app.py` as the main file
+5. Deploy!
+
 ---
 
 ## Results
