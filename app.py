@@ -82,7 +82,7 @@ st.markdown("""
 # ============================================================================
 # Register Custom Layers (Required for model loading)
 # ============================================================================
-@keras.saving.register_keras_serializable()
+@tf.keras.utils.register_keras_serializable()
 class EEGAugmenter(layers.Layer):
     """Data augmentation layer for EEG signals."""
     
@@ -110,7 +110,7 @@ class EEGAugmenter(layers.Layer):
         return x
 
 
-@keras.saving.register_keras_serializable()
+@tf.keras.utils.register_keras_serializable()
 class AdvancedEEGAugmenter(layers.Layer):
     """Advanced augmentation with channel dropout."""
     
@@ -157,7 +157,7 @@ class AdvancedEEGAugmenter(layers.Layer):
         return x
 
 
-@keras.saving.register_keras_serializable()
+@tf.keras.utils.register_keras_serializable()
 class ChannelAttention(layers.Layer):
     """Squeeze-and-Excitation attention for channels."""
     
