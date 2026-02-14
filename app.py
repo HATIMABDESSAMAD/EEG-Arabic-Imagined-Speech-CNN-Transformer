@@ -17,6 +17,13 @@ from pathlib import Path
 from collections import Counter
 import os
 
+# Try to import keras.saving for serialization (Keras 3)
+try:
+    from keras import saving as keras_saving
+    HAS_KERAS_SAVING = True
+except ImportError:
+    HAS_KERAS_SAVING = False
+
 # ============================================================================
 # Page Configuration
 # ============================================================================
@@ -82,6 +89,15 @@ st.markdown("""
 # ============================================================================
 # Custom Layers (Required for model loading)
 # ============================================================================
+
+# Decorator function that works with both Keras 2 and 3
+def register_if_available(cls):
+    """Register class with Keras if serialization is available."""
+    if HAS_KERAS_SAVING:
+        return keras_saving.register_keras_serializable()(cls)
+    return cls
+
+@register_if_available
 class EEGAugmenter(layers.Layer):
     """Data augmentation layer for EEG signals."""
     
@@ -109,6 +125,7 @@ class EEGAugmenter(layers.Layer):
         return x
 
 
+@register_if_available
 class AdvancedEEGAugmenter(layers.Layer):
     """Advanced augmentation with channel dropout."""
     
@@ -155,6 +172,7 @@ class AdvancedEEGAugmenter(layers.Layer):
         return x
 
 
+@register_if_available
 class ChannelAttention(layers.Layer):
     """Squeeze-and-Excitation attention for channels."""
     
@@ -261,17 +279,32 @@ def load_model():
         return None
     
     # Explicitly pass custom objects for model loading
+    # Try multiple naming conventions that Keras might use
     custom_objects = {
         'EEGAugmenter': EEGAugmenter,
         'AdvancedEEGAugmenter': AdvancedEEGAugmenter,
-        'ChannelAttention': ChannelAttention
+        'ChannelAttention': ChannelAttention,
+        # Keras 3 format with Custom> prefix
+        'Custom>EEGAugmenter': EEGAugmenter,
+        'Custom>AdvancedEEGAugmenter': AdvancedEEGAugmenter,
+        'Custom>ChannelAttention': ChannelAttention,
+        # __main__ package format (when saved from main script)
+        '__main__.EEGAugmenter': EEGAugmenter,
+        '__main__.AdvancedEEGAugmenter': AdvancedEEGAugmenter,
+        '__main__.ChannelAttention': ChannelAttention,
     }
     
     try:
         # Try loading with compile=False for better compatibility
-        return tf.keras.models.load_model(MODEL_PATH, custom_objects=custom_objects, compile=False)
+        model = tf.keras.models.load_model(MODEL_PATH, custom_objects=custom_objects, compile=False)
+        # Compile for prediction
+        model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+        return model
     except Exception as e:
         st.error(f"Error loading model: {str(e)}")
+        # Log more details for debugging
+        import traceback
+        st.text(traceback.format_exc())
         return None
 
 
