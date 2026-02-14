@@ -216,6 +216,8 @@ FREQUENCY_BANDS = {
 }
 
 MODEL_PATH = "outputs_advanced/best_model.keras"
+WEIGHTS_PATH = "outputs_advanced/model_weights.weights.h5"
+POS_EMB_PATH = "outputs_advanced/position_embedding.npy"
 NORM_STATS_PATH = "outputs_advanced/normalization_stats.npz"
 
 # ============================================================================
@@ -258,34 +260,56 @@ def extract_multiband_features(data: np.ndarray, fs: float = 128.0) -> np.ndarra
 
 @st.cache_resource
 def load_model():
-    """Load the trained model (cached)."""
-    # Custom objects dict for all custom layers
-    custom_objects = {
-        'EEGAugmenter': EEGAugmenter,
-        'AdvancedEEGAugmenter': AdvancedEEGAugmenter,
-        'ChannelAttention': ChannelAttention,
-        'Custom>EEGAugmenter': EEGAugmenter,
-        'Custom>AdvancedEEGAugmenter': AdvancedEEGAugmenter,
-        'Custom>ChannelAttention': ChannelAttention,
-    }
+    """Load the trained model by rebuilding architecture and loading weights."""
+    # Check if weights file exists (Keras 3 compatible)
+    if os.path.exists(WEIGHTS_PATH):
+        try:
+            model = rebuild_model_architecture()
+            model.load_weights(WEIGHTS_PATH)
+            model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+            return model
+        except Exception as e:
+            st.warning(f"Weight loading failed: {e}")
     
-    if not os.path.exists(MODEL_PATH):
-        st.error(f"Model file not found: {MODEL_PATH}")
-        return None
+    # Fallback: try loading original model (only works with Keras 2)
+    if os.path.exists(MODEL_PATH):
+        custom_objects = {
+            'EEGAugmenter': EEGAugmenter,
+            'AdvancedEEGAugmenter': AdvancedEEGAugmenter,
+            'ChannelAttention': ChannelAttention,
+            'Custom>EEGAugmenter': EEGAugmenter,
+            'Custom>AdvancedEEGAugmenter': AdvancedEEGAugmenter,
+            'Custom>ChannelAttention': ChannelAttention,
+        }
+        try:
+            model = tf.keras.models.load_model(MODEL_PATH, custom_objects=custom_objects, compile=False)
+            model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+            return model
+        except Exception as e:
+            st.error(f"Failed to load model: {e}")
+            return None
     
-    try:
-        model = tf.keras.models.load_model(MODEL_PATH, custom_objects=custom_objects, compile=False)
-        model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
-        return model
-    except Exception as e:
-        st.error(f"Failed to load model: {e}")
-        import traceback
-        st.text(traceback.format_exc())
-        return None
+    st.error("No model files found!")
+    return None
+
+
+class PositionEmbeddingLayer(layers.Layer):
+    """Custom layer for adding pre-trained position embeddings."""
+    
+    def __init__(self, position_embedding, **kwargs):
+        super().__init__(**kwargs)
+        self.position_embedding = tf.constant(position_embedding, dtype=tf.float32)
+    
+    def call(self, x):
+        return x + self.position_embedding
+    
+    def get_config(self):
+        config = super().get_config()
+        return config
 
 
 def rebuild_model_architecture():
-    """Rebuild the exact model architecture for weight loading."""
+    """Rebuild the exact model architecture for weight loading (Keras 3 compatible)."""
     from tensorflow.keras import regularizers
     
     input_shape = (128, 42)
@@ -299,69 +323,102 @@ def rebuild_model_architecture():
     
     time_steps, n_channels = input_shape
     
+    # Load position embedding from file
+    pos_emb = None
+    if os.path.exists(POS_EMB_PATH):
+        pos_emb = np.load(POS_EMB_PATH).astype(np.float32)
+    else:
+        # If no saved embedding, use zeros (will work but may affect accuracy)
+        pos_emb = np.zeros((32, cnn_filters), dtype=np.float32)
+    
     inputs = layers.Input(shape=input_shape, name='eeg_input')
     x = inputs
     
-    # Advanced augmentation
-    x = AdvancedEEGAugmenter(noise_std=0.02, time_shift_max=8, channel_dropout=0.1)(x)
+    # Advanced augmentation (training only, passthrough at inference)
+    x = AdvancedEEGAugmenter(noise_std=0.02, time_shift_max=8, channel_dropout=0.1, name='advanced_eeg_augmenter')(x)
     
     # CNN Block with Channel Attention
-    x = layers.Conv1D(cnn_filters, kernel_size=1, padding='same', kernel_regularizer=regularizers.l2(weight_decay))(x)
-    x = layers.BatchNormalization()(x)
-    x = layers.Activation('gelu')(x)
+    x = layers.Conv1D(cnn_filters, kernel_size=1, padding='same', 
+                      kernel_regularizer=regularizers.l2(weight_decay), name='conv1d')(x)
+    x = layers.BatchNormalization(name='batch_normalization')(x)
+    x = layers.Activation('gelu', name='activation')(x)
     
-    x = layers.Conv1D(cnn_filters, kernel_size=7, padding='same', kernel_regularizer=regularizers.l2(weight_decay))(x)
-    x = layers.BatchNormalization()(x)
-    x = layers.Activation('gelu')(x)
-    x = ChannelAttention(reduction_ratio=4)(x)
-    x = layers.Dropout(dropout)(x)
+    x = layers.Conv1D(cnn_filters, kernel_size=7, padding='same', 
+                      kernel_regularizer=regularizers.l2(weight_decay), name='conv1d_1')(x)
+    x = layers.BatchNormalization(name='batch_normalization_1')(x)
+    x = layers.Activation('gelu', name='activation_1')(x)
+    x = ChannelAttention(reduction_ratio=4, name='channel_attention')(x)
+    x = layers.Dropout(dropout, name='dropout')(x)
     
-    x = layers.Conv1D(cnn_filters, kernel_size=5, padding='same', kernel_regularizer=regularizers.l2(weight_decay))(x)
-    x = layers.BatchNormalization()(x)
-    x = layers.Activation('gelu')(x)
-    x = ChannelAttention(reduction_ratio=4)(x)
-    x = layers.Dropout(dropout)(x)
+    x = layers.Conv1D(cnn_filters, kernel_size=5, padding='same', 
+                      kernel_regularizer=regularizers.l2(weight_decay), name='conv1d_2')(x)
+    x = layers.BatchNormalization(name='batch_normalization_2')(x)
+    x = layers.Activation('gelu', name='activation_2')(x)
+    x = ChannelAttention(reduction_ratio=4, name='channel_attention_1')(x)
+    x = layers.Dropout(dropout, name='dropout_1')(x)
     
-    x = layers.Conv1D(cnn_filters, kernel_size=3, padding='same', kernel_regularizer=regularizers.l2(weight_decay))(x)
-    x = layers.BatchNormalization()(x)
-    x = layers.Activation('gelu')(x)
-    x = layers.Dropout(dropout)(x)
+    x = layers.Conv1D(cnn_filters, kernel_size=3, padding='same', 
+                      kernel_regularizer=regularizers.l2(weight_decay), name='conv1d_3')(x)
+    x = layers.BatchNormalization(name='batch_normalization_3')(x)
+    x = layers.Activation('gelu', name='activation_3')(x)
+    x = layers.Dropout(dropout, name='dropout_2')(x)
     
-    x = layers.MaxPooling1D(pool_size=2, strides=2)(x)
-    x = layers.MaxPooling1D(pool_size=2, strides=2)(x)
+    x = layers.MaxPooling1D(pool_size=2, strides=2, name='max_pooling1d')(x)
+    x = layers.MaxPooling1D(pool_size=2, strides=2, name='max_pooling1d_1')(x)
     
-    # Transformer
-    seq_len = 32  # After pooling: 128 -> 64 -> 32
+    # Position embedding - add constant tensor (compatible with Keras 3)
+    pos_embedding_const = tf.constant(pos_emb, dtype=tf.float32)
+    x = x + pos_embedding_const
+    x = layers.Dropout(dropout * 0.5, name='dropout_3')(x)
+    
+    # Transformer blocks
     embed_dim = cnn_filters
     
-    pos_embedding = layers.Embedding(input_dim=seq_len, output_dim=embed_dim, embeddings_regularizer=regularizers.l2(weight_decay))(tf.range(seq_len))
-    x = x + pos_embedding
-    x = layers.Dropout(dropout * 0.5)(x)
+    # Block 1
+    attn_output = layers.MultiHeadAttention(
+        num_heads=num_heads, key_dim=embed_dim // num_heads, value_dim=embed_dim // num_heads,
+        dropout=dropout * 0.5, kernel_regularizer=regularizers.l2(weight_decay),
+        name='multi_head_attention'
+    )(x, x)
+    x = layers.Add(name='add')([x, attn_output])
+    x = layers.LayerNormalization(epsilon=1e-6, name='layer_normalization')(x)
     
-    for i in range(transformer_layers):
-        attn_output = layers.MultiHeadAttention(
-            num_heads=num_heads, key_dim=embed_dim // num_heads,
-            dropout=dropout * 0.5, kernel_regularizer=regularizers.l2(weight_decay)
-        )(x, x)
-        x = layers.Add()([x, attn_output])
-        x = layers.LayerNormalization(epsilon=1e-6)(x)
-        
-        ff = layers.Dense(ff_dim * 2, activation='gelu', kernel_regularizer=regularizers.l2(weight_decay))(x)
-        ff = layers.Dropout(dropout)(ff)
-        ff = layers.Dense(embed_dim, kernel_regularizer=regularizers.l2(weight_decay))(ff)
-        ff = layers.Dropout(dropout)(ff)
-        
-        x = layers.Add()([x, ff])
-        x = layers.LayerNormalization(epsilon=1e-6)(x)
+    ff = layers.Dense(ff_dim * 2, activation='gelu', 
+                      kernel_regularizer=regularizers.l2(weight_decay), name='dense')(x)
+    ff = layers.Dropout(dropout, name='dropout_4')(ff)
+    ff = layers.Dense(embed_dim, kernel_regularizer=regularizers.l2(weight_decay), name='dense_1')(ff)
+    ff = layers.Dropout(dropout, name='dropout_5')(ff)
+    x = layers.Add(name='add_1')([x, ff])
+    x = layers.LayerNormalization(epsilon=1e-6, name='layer_normalization_1')(x)
+    
+    # Block 2
+    attn_output = layers.MultiHeadAttention(
+        num_heads=num_heads, key_dim=embed_dim // num_heads, value_dim=embed_dim // num_heads,
+        dropout=dropout * 0.5, kernel_regularizer=regularizers.l2(weight_decay),
+        name='multi_head_attention_1'
+    )(x, x)
+    x = layers.Add(name='add_2')([x, attn_output])
+    x = layers.LayerNormalization(epsilon=1e-6, name='layer_normalization_2')(x)
+    
+    ff = layers.Dense(ff_dim * 2, activation='gelu', 
+                      kernel_regularizer=regularizers.l2(weight_decay), name='dense_2')(x)
+    ff = layers.Dropout(dropout, name='dropout_6')(ff)
+    ff = layers.Dense(embed_dim, kernel_regularizer=regularizers.l2(weight_decay), name='dense_3')(ff)
+    ff = layers.Dropout(dropout, name='dropout_7')(ff)
+    x = layers.Add(name='add_3')([x, ff])
+    x = layers.LayerNormalization(epsilon=1e-6, name='layer_normalization_3')(x)
     
     # Classification Head
-    x = layers.GlobalAveragePooling1D()(x)
-    x = layers.Dropout(dropout)(x)
-    x = layers.Dense(128, activation='gelu', kernel_regularizer=regularizers.l2(weight_decay))(x)
-    x = layers.Dropout(dropout)(x)
-    x = layers.Dense(64, activation='gelu', kernel_regularizer=regularizers.l2(weight_decay))(x)
-    x = layers.Dropout(dropout * 0.5)(x)
-    outputs = layers.Dense(num_classes, activation='softmax', dtype='float32', kernel_regularizer=regularizers.l2(weight_decay))(x)
+    x = layers.GlobalAveragePooling1D(name='global_average_pooling1d')(x)
+    x = layers.Dropout(dropout, name='dropout_8')(x)
+    x = layers.Dense(128, activation='gelu', 
+                     kernel_regularizer=regularizers.l2(weight_decay), name='dense_4')(x)
+    x = layers.Dropout(dropout, name='dropout_9')(x)
+    x = layers.Dense(64, activation='gelu', 
+                     kernel_regularizer=regularizers.l2(weight_decay), name='dense_5')(x)
+    x = layers.Dropout(dropout * 0.5, name='dropout_10')(x)
+    outputs = layers.Dense(num_classes, activation='softmax', dtype='float32', 
+                          kernel_regularizer=regularizers.l2(weight_decay), name='dense_6')(x)
     
     model = keras.Model(inputs=inputs, outputs=outputs, name='Advanced_MultiBand_CNN_Transformer')
     return model
